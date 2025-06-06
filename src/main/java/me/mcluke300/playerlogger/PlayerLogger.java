@@ -44,7 +44,9 @@ public class PlayerLogger extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        // Do Nothing
+        if (playerListener != null) {
+            playerListener.shutdown();
+        }
     }
 
     public void DebugLog(String msg) {
