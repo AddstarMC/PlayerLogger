@@ -340,4 +340,11 @@ public class PListener implements Listener {
         return "[" + lines[0] + "]" + "[" + lines[1] + "]" + "[" + lines[2] + "]" + "[" + lines[3] + "]";
     }
 
+    /**
+     * Called when the plugin is disabled to release resources.
+     */
+    public void shutdown() {
+        datadb.close();
+    }
+
 }

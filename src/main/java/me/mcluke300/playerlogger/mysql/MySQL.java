@@ -96,15 +96,15 @@ public class MySQL {
                             "TABLE_NAME = '" + table + "' AND " +
                             "COLUMN_NAME = '" + column + "';";
 
-            Statement statement = connection.createStatement();
-            ResultSet res = statement.executeQuery(query);
-            while (res.next()) {
-                int colCount = res.getInt("RowCount");
-                if (colCount > 0)
-                    return true;
+            try (Statement statement = connection.createStatement();
+                 ResultSet res = statement.executeQuery(query)) {
+                while (res.next()) {
+                    int colCount = res.getInt("RowCount");
+                    if (colCount > 0)
+                        return true;
+                }
+                return false;
             }
-            statement.close();
-            return false;
 
         } catch (SQLException e) {
             e.printStackTrace();

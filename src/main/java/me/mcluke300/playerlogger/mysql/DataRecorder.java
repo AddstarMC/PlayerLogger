@@ -70,9 +70,10 @@ public class DataRecorder {
         DataRec rec = new DataRec();
 
         if (player != null) {
-            x = player.getLocation().getBlockX();
-            y = player.getLocation().getBlockY();
-            z = player.getLocation().getBlockZ();
+            var loc = player.getLocation();
+            x = loc.getBlockX();
+            y = loc.getBlockY();
+            z = loc.getBlockZ();
             rec.playername = player.getName();
             rec.playeruuid = player.getUniqueId().toString();
         } else {
@@ -118,6 +119,22 @@ public class DataRecorder {
         Bukkit.getServer().getScheduler().runTaskTimerAsynchronously(plugin, this::writeBuffer, 400L, 400L);
     }
 
+    /**
+     * Flushes any queued records and closes the database connection.
+     */
+    public void close() {
+        writeBuffer();
+        if (con != null) {
+            try {
+                con.close();
+            } catch (SQLException e) {
+                plugin.Log("WARNING: Unable to close database connection!");
+                e.printStackTrace();
+            }
+            con = null;
+        }
+    }
+
     private void writeBuffer() {
         int count;
         synchronized (records) {
@@ -133,6 +150,18 @@ public class DataRecorder {
         if (con == null) {
             plugin.Log("WARNING: No valid database connection - Not writing record queue");
             return;
+        } else {
+            try {
+                if (con.isClosed()) {
+                    plugin.Log("WARNING: Database connection closed - reconnecting");
+                    if (!ConnectDB())
+                        return;
+                }
+            } catch (SQLException e) {
+                plugin.Log("WARNING: Error checking database connection. Reconnecting...");
+                ConnectDB();
+                return;
+            }
         }
 
         plugin.DebugLog("Launching save task for " + count + " queued records...");
@@ -152,7 +181,7 @@ public class DataRecorder {
                 // Prepared statement
                 pst = con.prepareStatement("INSERT INTO " + tablename + " (playeruuid, playername, type, time, data, x, y, z, world, server, cancelled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
-                // Save all the queued records
+                // Save all the queued records using batching for efficiency
                 for (DataRec rec : copy) {
                     // Values
                     pst.setString(1, rec.playeruuid);
@@ -167,9 +196,10 @@ public class DataRecorder {
                     pst.setString(10, servername);
                     pst.setByte(11, rec.cancelled);
 
-                    // Do the MySQL query
-                    pst.executeUpdate();
+                    pst.addBatch();
                 }
+
+                pst.executeBatch();
                 copy.clear();
                 con.commit();
             } catch (SQLException ex) {
@@ -186,22 +216,19 @@ public class DataRecorder {
     }
 
     private void pingDB() {
-        Statement st = null;
-        try {
-            st = con.createStatement();
+        if (con == null) {
+            ConnectDB();
+            return;
+        }
+
+        try (Statement st = con.createStatement()) {
             st.executeQuery("/* ping */ SELECT 1");
+            return;
         } catch (SQLException e) {
             plugin.Log("WARNING: MySQL database ping failed!");
             plugin.Log("Reconnecting to database...");
             ConnectDB();
             e.printStackTrace();
-        } finally {
-            try {
-                if (st != null) st.close();
-            } catch (SQLException e) {
-                plugin.Log("ERROR: Failed to close Statement!");
-                e.printStackTrace();
-            }
         }
     }
 
